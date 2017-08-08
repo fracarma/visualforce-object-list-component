@@ -1,5 +1,9 @@
 # Visualforce Object List Component
 
+<a target="_blank" href="https://githubsfdeploy.herokuapp.com?owner=fracarma&repo=visualforce-object-list-component">
+  <img alt="Deploy to Salesforce" src="https://raw.githubusercontent.com/afawcett/githubsfdeploy/master/src/main/webapp/resources/img/deploy.png">
+</a>
+
 VF Component useful for display and CRUD on records. The fields displayed for every records can be defined in one fieldset or more,
 controlled by the record type. If one fieldset is needed, the name of the fieldset for the child object has to be declared in the parameter
 __fieldSet__. If this parameter is not defined, the component will search for fieldsets with the same API Name of the record Type.
@@ -24,13 +28,13 @@ But also with custom fields/objects:
 		childsObjectType="{!$ObjectType.Growth_Alert__c.name}" 
 		childToParentLookupField="{!$ObjectType.Growth_Alert__c.Fields.Summary__c.name}"
 		addRecordType="false"
-    fieldSet="field_set_Name"
+    		fieldSet="field_set_Name"
 		allowChangeRecordTypeForExistingRecords="false"
 		fieldsToShowInSectionTitle="Name"
 		showName="true"
-    tableFormat="false"
-    orderBy="CreatedDate"
-    showButtons="true"
+    		tableFormat="false"
+    		orderBy="CreatedDate"
+    		showButtons="true"
 	/>
 ```
 
