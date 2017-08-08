@@ -1,0 +1,228 @@
+<apex:component controller="ObjectListComponentController" allowDML="true">
+
+	<apex:includeScript value="{!$Resource.disableButtons}"/>
+
+
+	<apex:attribute name="parentRecordId"
+                    type="Id"
+                    required="true"
+                    description="The parent record" 
+                    assignTo="{!parentObjectId}"/>
+
+    <apex:attribute name="childSobjectType"
+                    type="String"
+                    required="true"
+                    description="The child object name" 
+                    assignTo="{!childObjectTypeString}"/>    
+
+    <apex:attribute name="childToParentLookupField"
+                    type="String"
+                    required="true"
+                    description="The lookup field on child object" 
+                    assignTo="{!lookupFieldString}"/>    
+
+    <apex:attribute name="fieldSet"
+                    type="String"
+                    required="false"
+                    description="The fieldset name. If present, that one is used. If not, I check the record type name and I search for the fieldset with the same name" 
+                    assignTo="{!fieldSetToUseName}"/>    
+
+    <apex:attribute name="title"
+                    type="String"
+                    required="false"
+                    description="Page block title"
+    />
+    <apex:attribute name="showButtons"
+    				default="true"
+                    type="Boolean"
+                    required="false"
+                    description="Allow editing the records"
+    />    
+
+    <apex:attribute name="showCreateButton"
+    				default="true"
+                    type="Boolean"
+                    required="false"
+                    description="Allow creating the records"
+    />    
+
+    <apex:attribute name="addRecordType"
+    				default="false"
+                    type="Boolean"
+                    required="false"
+                    description="Allow changing the record type"
+    />    
+
+    <apex:attribute name="allowChangeRecordTypeForExistingRecords"
+    				default="true"
+                    type="Boolean"
+                    required="false"
+                    description="Allow changing the record type for existing objects"
+    />    
+
+    <apex:attribute name="fieldsToShowInSectionTitle"
+    				default="Name"
+                    type="String"
+                    required="false"
+                    description="Possible values are Name and RecordType"
+                    assignTo="{!fieldToShowInSectionTitleString}"
+    />    
+
+    <apex:attribute name="showName"
+    				default="false"
+                    type="Boolean"
+                    required="false"
+                    description="Show the item name with a link to standard layout"
+    />    
+
+    <apex:attribute name="tableFormat"
+    				default="false"
+                    type="Boolean"
+                    required="false"
+                    description="Show the items in tabular way"
+    />    
+
+    <apex:attribute name="orderBy"
+                    type="String"
+                    required="false"
+                    description="Field to orderBy"
+                    assignTo="{!orderByJSON}"
+    />
+	
+	<apex:includeLightning />
+    <apex:form id="form">
+    	<apex:pageMessages />
+    	<apex:pageBlock title="{!title}">
+		    
+		    <apex:pageBlockButtons location="both" rendered="{!showButtons}">
+			    <apex:commandButton value="Save {!childObjectPluralLabel}" action="{!saveChildObjectMap}" styleClass="{!childSobjectType}componentButton" reRender="form" rendered="{!isEditMode}" onclick="disableButtons('{!childSobjectType}componentButton');" oncomplete="enableButtons('{!childSobjectType}componentButton');" status="saving"/>
+			    <apex:commandButton value="Cancel" action="{!cancel}" reRender="form" rendered="{!isEditMode}" styleClass="{!childSobjectType}componentButton" immediate="true" onclick="disableButtons('{!childSobjectType}componentButton');" oncomplete="enableButtons('{!childSobjectType}componentButton');"/>
+			    <apex:commandButton value="Edit {!childObjectPluralLabel}" action="{!enterEditMode}" immediate="true" styleClass="{!childSobjectType}componentButton" reRender="form" rendered="{! !isEditMode && userPermissionMap['edit']}" onclick="disableButtons('{!childSobjectType}componentButton');" oncomplete="enableButtons('{!childSobjectType}componentButton');"/>
+                <apex:actionStatus id="saving" >
+                        <apex:facet name="start" >
+                            <img src="/img/loading.gif" />                    
+                            Saving {!childObjectPluralLabel}...
+                        </apex:facet>
+                </apex:actionStatus>
+            </apex:pageBlockButtons>
+		    
+		    <apex:outputPanel rendered="{! !tableFormat}" >
+			    <apex:repeat value="{!ChildObjectMap}" var="key" >
+			        <apex:pageBlockSection >
+			            <apex:facet name="header" >
+				            <apex:outputPanel layout="none" styleClass="String">
+								
+								<span style="margin-right: 10px" draggable="false" >
+									<apex:commandButton value="Remove" action="{!removeChildObject}" reRender="form" rendered="{!NOT(ChildObjectMap[key].toBeCancelled) && ((ChildObjectMap[key].toBeUpdated)||!ChildObjectMap[key].toBeUpdated &&userPermissionMap['delete'])}" disabled="{! !isEditMode}" immediate="true" onclick="disableButtons(this);" oncomplete="enableButtons(this);">
+						                <apex:param value="{!key}" name="ChildObjectToRemoveKey" assignTo="{!ChildObjectToRemoveKey}" />
+						            </apex:commandButton>
+
+						            <apex:commandButton value="Restore" action="{!restoreChildObject}" reRender="form" rendered="{!ChildObjectMap[key].toBeCancelled}" disabled="{! !isEditMode}" immediate="true" onclick="disableButtons(this);" oncomplete="enableButtons(this);">
+						                <apex:param value="{!key}" name="ChildObjectToRestoreKey" assignTo="{!ChildObjectToRestoreKey}" />
+						            </apex:commandButton>
+					            </span>
+					       		
+		            			<span style="margin-right: 10px;">
+					       		
+						       		<apex:image value="/img/func_icons/util/checkmark16.gif" style="background-color: white"  rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),ChildObjectMap[key].toBeUpdated)}"/>
+						            <apex:image value="/img/func_icons/util/pencil12.gif"  style="background-color: white" rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),NOT(ChildObjectMap[key].toBeUpdated))}"/>
+						            <apex:image value="/img/func_icons/util/recycle.gif"  style="background-color: white" rendered="{!(ChildObjectMap[key].toBeCancelled)}"/>
+		            			</span>
+
+		            			<span style="margin-right: 10px; ">
+		            				<apex:outputText value="#{!key+1} - {!ChildObjectMap[key].sectionTitle}" />
+								</span>
+								
+				            </apex:outputPanel>
+			            </apex:facet>
+
+
+				        <!-- RECORD TYPE -->
+				        <apex:inputField value="{!ChildObjectMap[key].ChildObject.RecordTypeId}" rendered="{!NOT((ChildObjectMap[key].toBeUpdated && !allowChangeRecordTypeForExistingRecords) || ChildObjectMap[key].toBeCancelled || !isEditMode) && addRecordType && hasRecordTypes}">
+							<apex:actionSupport action="{!refreshFieldList}" event="onchange" rerender="form" >
+								<apex:param value="{!key}" name="refreshFieldKey" assignTo="{!refreshFieldKey}" />
+							</apex:actionSupport> 
+						</apex:inputField>
+				        <apex:outputField value="{!ChildObjectMap[key].ChildObject.RecordTypeId}" rendered="{!((ChildObjectMap[key].toBeUpdated && !allowChangeRecordTypeForExistingRecords) || ChildObjectMap[key].toBeCancelled || !isEditMode) && addRecordType && hasRecordTypes}"/>
+				        
+				        <!-- LINK TO STANDARD LAYOUT -->
+				   		<apex:pageBlockSectionItem rendered="{! showName && ChildObjectMap[key].ChildObject.Id != null}">
+							<apex:outputLabel value="{!$ObjectType[childSobjectType].fields.Name.Label}"/>
+							<apex:outputLink value="{! URLFOR($Action[childSobjectType].View, ChildObjectMap[key].ChildObject.Id)}" target="_blank"> {! ChildObjectMap[key].ChildObject.Name} </apex:outputLink>
+						</apex:pageBlockSectionItem>
+						
+						<!-- Fracarma: I need this to align all the fields (EXCLUSIVE OR) -->
+						<apex:pageBlockSectionItem rendered="{!NOT((addRecordType && hasRecordTypes) && (showName && ChildObjectMap[key].ChildObject.Id != null)) && ((addRecordType && hasRecordTypes) || (showName && ChildObjectMap[key].ChildObject.Id != null))}" ></apex:pageBlockSectionItem>
+				        
+				        <!-- ALL FIELDS -->
+				        <apex:repeat value="{!ChildObjectMap[key].fieldList}" var="f">
+				            <apex:inputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!NOT(ChildObjectMap[key].toBeCancelled || !isEditMode)}" required="{!OR(f.required, f.dbrequired)}"/>
+				            <apex:outputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!ChildObjectMap[key].toBeCancelled || !isEditMode}"/>
+			            </apex:repeat>
+
+				    </apex:pageBlockSection>
+			    </apex:repeat>
+			</apex:outputPanel>
+			<apex:outputPanel rendered="{! tableFormat}" >
+				<apex:outputPanel rendered="{! !isChildObjectMapEmpty}" >
+					<table class="list" border="0" cellspacing="0" cellpadding="0">
+	                  		<thead>
+								<tr class="headerRow">
+									<th  class=" zen-deemphasize">#</th>
+									<th class=" zen-deemphasize"></th>
+									<apex:repeat value="{!ChildObjectMap[0].fieldList}" var="f" >
+										<th class=" zen-deemphasize">{!$ObjectType[childSobjectType].fields[f.fieldPath].Label}</th>
+									</apex:repeat>
+									<th class=" zen-deemphasize">Actions</th>
+
+								</tr>
+							</thead>
+						<apex:repeat value="{!ChildObjectMap}" var="key" >
+							<apex:variable var="rowCls" value="{!IF(mod(key,2)==0,'evenRow', 'oddRow')}"/>
+							<tr class="dataRow {!rowCls}" onblur="if (window.hiOff){hiOff(this);}" onfocus="if (window.hiOn){hiOn(this);}" onmouseout="if (window.hiOff){hiOff(this);}" onmouseover="if (window.hiOn){hiOn(this);}">
+								<td class="dataCell">
+									<apex:outputText value="{!key + 1}" />
+								</td>
+								<td class="dataCell">
+						       		<apex:image value="/img/func_icons/util/checkmark16.gif" style="background-color: white"  rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),ChildObjectMap[key].toBeUpdated)}"/>
+						            <apex:image value="/img/func_icons/util/pencil12.gif"  style="background-color: white" rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),NOT(ChildObjectMap[key].toBeUpdated))}"/>
+						            <apex:image value="/img/func_icons/util/recycle.gif"  style="background-color: white" rendered="{!(ChildObjectMap[key].toBeCancelled)}"/>
+								</td>
+              					<apex:repeat value="{!ChildObjectMap[key].fieldList}" var="f" >
+								<td class="dataCell">
+						            <apex:inputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!NOT(ChildObjectMap[key].toBeCancelled || !isEditMode)}" required="{!OR(f.required, f.dbrequired)}"/>
+						            <apex:outputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!ChildObjectMap[key].toBeCancelled || !isEditMode}"/>
+								</td>
+		        				</apex:repeat>
+								<td class="dataCell">
+			                		<apex:commandButton value="Remove" action="{!removeChildObject}" reRender="form" rendered="{!NOT(ChildObjectMap[key].toBeCancelled) && ((ChildObjectMap[key].toBeUpdated)||!ChildObjectMap[key].toBeUpdated &&userPermissionMap['delete'])}" disabled="{! !isEditMode}" immediate="true" onclick="disableButtons(this);" oncomplete="enableButtons(this);">
+						                <apex:param value="{!key}" name="ChildObjectToRemoveKey" assignTo="{!ChildObjectToRemoveKey}" />
+						            </apex:commandButton>
+								</td>
+							</tr>
+						</apex:repeat>
+					</table>
+				</apex:outputPanel>		        
+			</apex:outputPanel>
+
+		    <div align="center" draggable="false" >
+		    	<div>
+	    	        <apex:actionStatus id="creatingItem" >
+		    	        <apex:facet name="start" >
+		            	    <img src="/img/loading.gif" />                    
+		        	        Creating {!childObjectSingleLabel}...
+		            	</apex:facet>
+		    	        <apex:facet name="stop" >
+            				<apex:commandlink action="{!createNewChildObject}" reRender="form" rendered="{!isEditMode && userPermissionMap['create'] && showCreateButton}" status="creatingItem" immediate="true"><apex:image url="{!$Resource.addIcon}" /></apex:commandlink>
+		    	        	
+		            	</apex:facet>
+	                </apex:actionStatus>
+	            </div>
+            </div>
+		</apex:pageBlock>
+    	<apex:pageMessages />
+    </apex:form>
+
+        
+
+</apex:component>
