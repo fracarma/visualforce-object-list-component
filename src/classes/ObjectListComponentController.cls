@@ -2,6 +2,7 @@ public with sharing class ObjectListComponentController {
 
     public Id parentObjectId {get;set{
             parentObjectId = value;
+            initFilterSection();
             initExistingchildObject();
         }
     }
@@ -46,6 +47,12 @@ public with sharing class ObjectListComponentController {
     public Map<String,Boolean> userPermissionMap            {get; private set;}
     public String fieldSetToUseName {get; set;}
     public String orderByJSON {get; set;}
+    public String filterByJSON {get; set;}
+    public SelectOption[] filterByOptionList {get;private set;}
+    public String filterByValue {get; set{
+            this.filterByValue = (value != 'no value') ? value : null;
+        }
+    }
     public String childObjectSingleLabel {get; private set;}
     public String childObjectPluralLabel {get; private set;}
     
@@ -123,6 +130,10 @@ public with sharing class ObjectListComponentController {
         String parentObjectIdString = String.valueOf(parentObjectId);
         
         String query = SOQLUtils.createQuery(fieldNameSet, childObjectType.getDescribe().getName() , lookupField.getDescribe().getName()+' =: parentObjectIdString');
+        if(filterByValue != null){
+            query += ' AND '+filterByJSON+' = \''+filterByValue+'\' ';
+        }
+
         if(orderByJSON != null){
             try {
                 orderByJSON = orderByJSON.replace('\'', '\"');
@@ -141,8 +152,6 @@ public with sharing class ObjectListComponentController {
             }
         }
         
-        system.debug('@@query: '+query);
-
         for(SObject existingchildObject: Database.query(query)){
             childObjectMap.put(key, new wrapper(existingchildObject,
                 childObjectType,
@@ -160,6 +169,29 @@ public with sharing class ObjectListComponentController {
     private void populatePermissionMap(){
         ObjectPermissionHandler currentUserPermission = ObjectPermissionHandler.getInstance();
         userPermissionMap = currentUserPermission.getUserPermissionMap().get(childObjectType.getDescribe().getName());
+    }
+
+    public void setIsInitializedToFalse(){
+        this.isInitialized = false;
+    }
+
+    private void initFilterSection(){
+        if(filterByJSON == null){
+            return;
+        }
+        Set<String> fieldNameSet = new Set<String>{filterByJSON};
+        String parentObjectIdString = String.valueOf(parentObjectId);
+        String query = SOQLUtils.createQuery(fieldNameSet, childObjectType.getDescribe().getName() , lookupField.getDescribe().getName()+' =: parentObjectIdString');
+        query += ' GROUP BY ' + filterByJSON;
+        AggregateResult[] filterFieldValueList = Database.query(query);
+        
+        filterByOptionList = new List<SelectOption>();
+        filterByOptionList.add(new SelectOption('no value', ' --- '));
+        for(AggregateResult filterFieldValue: filterFieldValueList){
+            String filterFieldValueString = filterFieldValue.get(filterByJSON) != null ? String.valueOf(filterFieldValue.get(filterByJSON)) : '';
+            filterByOptionList.add(new SelectOption(filterFieldValueString, filterFieldValueString));
+        }
+
     }
 
          /*******************************************************************************************************
@@ -369,13 +401,8 @@ public with sharing class ObjectListComponentController {
 
         private Schema.FieldSetMember[] getFields(){
             List<Schema.FieldSetMember> fieldList = new List<Schema.FieldSetMember>();
-            
-            if(!hasRecordTypes){
-                return fieldList;
-            }
-            
+                      
             Map<String, Schema.FieldSet> fieldSetMap = childObjectType.getDescribe().fieldSets.getMap();
-
             if(fieldSetToUseName != null){
                 if(!fieldSetMap.containsKey(fieldSetToUseName)){
                     system.debug('@@There is no fieldset named '+fieldSetToUseName+' for the object '+childObjectType.getDescribe().getName());
@@ -384,8 +411,13 @@ public with sharing class ObjectListComponentController {
                 fieldList.addAll(fieldSetMap.get(fieldSetToUseName).getFields());
                 return fieldList;
             }
-
-            Id recordTypeId = (Id) this.childObject.get('RecordTypeId');
+            Id recordTypeId;
+            try {
+                recordTypeId = (Id) this.childObject.get('RecordTypeId');
+            } catch (Exception e) {
+                system.debug('@@Exception on '+e.getStackTraceString()+' : '+e.getMessage());
+                return fieldList;
+            }
             if(recordTypeId == null){
                 return fieldList;
             }

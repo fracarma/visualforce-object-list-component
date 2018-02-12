@@ -1,4 +1,7 @@
 <apex:component controller="ObjectListComponentController" allowDML="true">
+	<apex:includeScript value="https://code.jquery.com/jquery-1.11.1.min.js" />
+	<apex:includescript value="//cdn.datatables.net/1.10.4/js/jquery.dataTables.min.js" />
+	<apex:stylesheet value="//cdn.datatables.net/1.10.4/css/jquery.dataTables.css" />
 
 	<apex:includeScript value="{!$Resource.disableButtons}"/>
 
@@ -81,13 +84,37 @@
                     required="false"
                     description="Show the items in tabular way"
     />    
+    <apex:attribute name="useDatatable"
+    				default="false"
+                    type="Boolean"
+                    required="false"
+                    description="If it is a tableFormat, use datatable"
+    />    
 
     <apex:attribute name="orderBy"
                     type="String"
                     required="false"
                     description="Field to orderBy"
                     assignTo="{!orderByJSON}"
+    />    
+    <apex:attribute name="filterBy"
+                    type="String"
+                    required="false"
+                    description="Field to add filter on"
+                    assignTo="{!filterByJSON}"
     />
+    <apex:attribute name="showActions"
+    				default="true"
+                    type="Boolean"
+                    required="false"
+                    description="Show the action column (Remove, Restore)"
+    />    
+    <apex:attribute name="showRecordNumber"
+    				default="true"
+                    type="Boolean"
+                    required="false"
+                    description="Show the action column (Remove, Restore)"
+    />        
 	
 	<apex:includeLightning />
     <apex:form id="form">
@@ -104,7 +131,23 @@
                             Saving {!childObjectPluralLabel}...
                         </apex:facet>
                 </apex:actionStatus>
+                <apex:actionStatus id="loading" >
+                        <apex:facet name="start" >
+                            <img src="/img/loading.gif" />                    
+                            Loading {!childObjectPluralLabel}...
+                        </apex:facet>
+                </apex:actionStatus>
             </apex:pageBlockButtons>
+    		
+    		<apex:pageBlockSection title="Filters" rendered="{!filterBy != null}">
+    			<apex:pageBlockSectionItem>
+    				<apex:outputLabel value="{!$ObjectType[childSobjectType].fields[filterBy].Label}"/>
+    				<apex:selectList value="{!filterByValue}" title="" size="1">
+    					<apex:selectOptions value="{!filterByOptionList}" />
+    					<apex:actionSupport action="{!setIsInitializedToFalse}" event="onchange" rerender="form" status="loading" />
+    				</apex:selectList>
+    			</apex:pageBlockSectionItem>
+    		</apex:pageBlockSection>
 		    
 		    <apex:outputPanel rendered="{! !tableFormat}" >
 			    <apex:repeat value="{!ChildObjectMap}" var="key" >
@@ -163,42 +206,62 @@
 				    </apex:pageBlockSection>
 			    </apex:repeat>
 			</apex:outputPanel>
+
 			<apex:outputPanel rendered="{! tableFormat}" >
 				<apex:outputPanel rendered="{! !isChildObjectMapEmpty}" >
-					<table class="list" border="0" cellspacing="0" cellpadding="0">
+					<table class="list" border="0" cellspacing="0" cellpadding="0" id="table">
 	                  		<thead>
 								<tr class="headerRow">
-									<th  class=" zen-deemphasize">#</th>
-									<th class=" zen-deemphasize"></th>
+									<apex:outputPanel rendered="{!showRecordNumber}">
+										<th  class=" zen-deemphasize">#</th>
+									</apex:outputPanel>
+									<apex:outputPanel rendered="{!showActions}">
+										<!-- Column for the action icons -->
+										<th class=" zen-deemphasize"></th>
+									</apex:outputPanel>
 									<apex:repeat value="{!ChildObjectMap[0].fieldList}" var="f" >
-										<th class=" zen-deemphasize">{!$ObjectType[childSobjectType].fields[f.fieldPath].Label}</th>
+										<th class=" zen-deemphasize">
+											<span class="helpButton">
+												{!$ObjectType[childSobjectType].fields[f.fieldPath].Label}
+												<apex:outputPanel rendered="{!$ObjectType[childSobjectType].fields[f.fieldPath].inlineHelpText != null}">
+													<img src="/img/s.gif" alt="" class="helpOrb" title="{!$ObjectType[childSobjectType].fields[f.fieldPath].inlineHelpText}"/>
+												</apex:outputPanel>
+											</span>
+										</th>
 									</apex:repeat>
-									<th class=" zen-deemphasize">Actions</th>
-
+									<apex:outputPanel rendered="{!showActions}">
+										<th class=" zen-deemphasize">Actions</th>
+									</apex:outputPanel>
 								</tr>
 							</thead>
 						<apex:repeat value="{!ChildObjectMap}" var="key" >
 							<apex:variable var="rowCls" value="{!IF(mod(key,2)==0,'evenRow', 'oddRow')}"/>
 							<tr class="dataRow {!rowCls}" onblur="if (window.hiOff){hiOff(this);}" onfocus="if (window.hiOn){hiOn(this);}" onmouseout="if (window.hiOff){hiOff(this);}" onmouseover="if (window.hiOn){hiOn(this);}">
-								<td class="dataCell">
-									<apex:outputText value="{!key + 1}" />
-								</td>
-								<td class="dataCell">
-						       		<apex:image value="/img/func_icons/util/checkmark16.gif" style="background-color: white"  rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),ChildObjectMap[key].toBeUpdated)}"/>
-						            <apex:image value="/img/func_icons/util/pencil12.gif"  style="background-color: white" rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),NOT(ChildObjectMap[key].toBeUpdated))}"/>
-						            <apex:image value="/img/func_icons/util/recycle.gif"  style="background-color: white" rendered="{!(ChildObjectMap[key].toBeCancelled)}"/>
-								</td>
+								<apex:outputPanel rendered="{!showRecordNumber}">
+									<td class="dataCell">
+										<apex:outputText value="{!key + 1}" />
+									</td>
+								</apex:outputPanel>
+								<apex:outputPanel rendered="{!showActions}">
+									<td class="dataCell">
+							       		
+							            <apex:image value="/img/func_icons/util/pencil12.gif"  style="background-color: white" rendered="{!AND(NOT(ChildObjectMap[key].toBeCancelled),NOT(ChildObjectMap[key].toBeUpdated))}"/>
+							            <apex:image value="/img/func_icons/util/recycle.gif"  style="background-color: white" rendered="{!(ChildObjectMap[key].toBeCancelled)}"/>
+									</td>
+								</apex:outputPanel>
               					<apex:repeat value="{!ChildObjectMap[key].fieldList}" var="f" >
-								<td class="dataCell">
-						            <apex:inputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!NOT(ChildObjectMap[key].toBeCancelled || !isEditMode)}" required="{!OR(f.required, f.dbrequired)}"/>
-						            <apex:outputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!ChildObjectMap[key].toBeCancelled || !isEditMode}"/>
-								</td>
+									<td class="dataCell">
+							            <apex:inputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!NOT(ChildObjectMap[key].toBeCancelled || !isEditMode)}" required="{!OR(f.required, f.dbrequired)}"/>
+							            <apex:outputField value="{!ChildObjectMap[key].ChildObject[f.fieldPath]}" rendered="{!ChildObjectMap[key].toBeCancelled || !isEditMode}"/>
+									</td>
 		        				</apex:repeat>
-								<td class="dataCell">
-			                		<apex:commandButton value="Remove" action="{!removeChildObject}" reRender="form" rendered="{!NOT(ChildObjectMap[key].toBeCancelled) && ((ChildObjectMap[key].toBeUpdated)||!ChildObjectMap[key].toBeUpdated &&userPermissionMap['delete'])}" disabled="{! !isEditMode}" immediate="true" onclick="disableButtons(this);" oncomplete="enableButtons(this);">
-						                <apex:param value="{!key}" name="ChildObjectToRemoveKey" assignTo="{!ChildObjectToRemoveKey}" />
-						            </apex:commandButton>
-								</td>
+		        				<apex:outputPanel rendered="{!showActions}">
+									<td class="dataCell">
+				                		<apex:commandButton value="Remove" action="{!removeChildObject}" reRender="form" rendered="{!NOT(ChildObjectMap[key].toBeCancelled) && ((ChildObjectMap[key].toBeUpdated)||!ChildObjectMap[key].toBeUpdated &&userPermissionMap['delete'])}" disabled="{! !isEditMode}" immediate="true" onclick="disableButtons(this);" oncomplete="enableButtons(this);">
+							                <apex:param value="{!key}" name="ChildObjectToRemoveKey" assignTo="{!ChildObjectToRemoveKey}" />
+							            </apex:commandButton>
+									</td>
+								</apex:outputPanel>
 							</tr>
 						</apex:repeat>
 					</table>
@@ -221,6 +284,18 @@
             </div>
 		</apex:pageBlock>
     	<apex:pageMessages />
+		<script type="text/javascript">
+	    j$ = jQuery.noConflict();
+
+		j$(document).ready(function() {
+			if(!{!useDatatable}){
+				return;
+			}
+	    	// Configurar datatables de contactos
+	    	var table = j$("#table").DataTable({});
+	   	});
+			
+		</script>
     </apex:form>
 
         
